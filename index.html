@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>JK Delivery</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="JK Delivery">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header>
+    <span class="header-title">📦 JK Delivery</span>
+    <span id="header-badge" class="header-badge hidden"></span>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="next">Next</button>
+    <button class="tab" data-tab="jobs">Jobs</button>
+    <button class="tab" data-tab="route">Route</button>
+    <button class="tab" data-tab="map">Map</button>
+    <button class="tab" data-tab="stats">Stats</button>
+  </nav>
+
+  <!-- Main -->
+  <main>
+
+    <!-- ── NEXT TAB ────────────────────────────────────── -->
+    <div id="tab-next" class="tab-content active">
+      <div id="next-content"></div>
+    </div>
+
+    <!-- ── JOBS TAB ────────────────────────────────────── -->
+    <div id="tab-jobs" class="tab-content">
+
+      <!-- Starting Location -->
+      <div class="card">
+        <div class="card-title">Starting Location</div>
+        <div id="location-display" class="location-display">Not set</div>
+        <div class="location-row">
+          <input type="text" id="start-postal" maxlength="6" placeholder="Postal code" inputmode="numeric">
+          <button id="set-location-btn" class="btn btn-outline btn-sm">Set</button>
+          <button id="use-gps-btn" class="btn btn-outline btn-sm">GPS</button>
+        </div>
+      </div>
+
+      <!-- Add Job -->
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">Add Job</span>
+          <button id="toggle-form-btn" class="btn btn-outline btn-sm">▲ Collapse</button>
+        </div>
+        <div id="add-job-form">
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Contractor</label>
+              <select id="contractor">
+                <option value="">— Select —</option>
+                <option value="Lalamove">Lalamove</option>
+                <option value="UParcel">UParcel</option>
+                <option value="GOGOX">GOGOX</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Service Type</label>
+              <select id="order-type">
+                <option value="">— Select —</option>
+                <option value="Express">Express</option>
+                <option value="Standard">Standard</option>
+                <option value="Scheduled">Scheduled</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Pickup Postal</label>
+            <input type="text" id="pickup-postal" maxlength="6" placeholder="e.g. 238823" inputmode="numeric">
+          </div>
+
+          <div class="tw-section">
+            <div class="tw-label">Pickup Window <span class="tw-optional">(optional)</span></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>From</label>
+                <input type="time" id="pickup-tw-start">
+              </div>
+              <div class="form-group">
+                <label>To</label>
+                <input type="time" id="pickup-tw-end">
+              </div>
+            </div>
+          </div>
+
+          <div class="dropoffs-section-label">Dropoff(s)</div>
+          <div id="dropoffs-container"></div>
+          <button type="button" id="add-dropoff-btn" class="btn btn-outline btn-sm add-dropoff-btn">+ Add Another Dropoff</button>
+
+          <div class="form-group">
+            <label>Equipment</label>
+            <div class="equip-toggles">
+              <button type="button" class="equip-btn" data-equip="trolley">🛒 Trolley</button>
+              <button type="button" class="equip-btn" data-equip="food bag">🧊 Food Bag</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Note (optional)</label>
+            <input type="text" id="job-note" placeholder="e.g. Unit 05-12, leave at door">
+          </div>
+          <button id="add-job-btn" class="btn btn-primary">Add Job</button>
+        </div>
+      </div>
+
+      <!-- Job List -->
+      <div id="job-list"></div>
+
+      <!-- Clear All -->
+      <div id="clear-all-row" class="hidden">
+        <button id="clear-all-btn" class="btn btn-danger-outline">Clear All Completed</button>
+      </div>
+
+    </div><!-- /jobs -->
+
+    <!-- ── ROUTE TAB ───────────────────────────────────── -->
+    <div id="tab-route" class="tab-content">
+      <div class="card route-header-card">
+        <div class="route-header">
+          <div>
+            <div class="card-title">Optimized Route</div>
+            <div id="route-summary" class="route-summary">Press Optimize to plan your route.</div>
+          </div>
+          <button id="optimize-btn" class="btn btn-primary btn-sm">Optimize</button>
+        </div>
+      </div>
+      <div id="route-list"></div>
+    </div>
+
+    <!-- ── MAP TAB ─────────────────────────────────────── -->
+    <div id="tab-map" class="tab-content">
+      <div id="map"></div>
+    </div>
+
+    <!-- ── STATS TAB ───────────────────────────────────── -->
+    <div id="tab-stats" class="tab-content">
+
+      <!-- Today's Summary -->
+      <div class="card">
+        <div class="card-title">Today's Summary</div>
+        <div class="stat-grid" id="summary-stats">
+          <div class="stat-cell">
+            <div class="stat-value" id="stat-jobs">0</div>
+            <div class="stat-label">Jobs</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value" id="stat-stops">0</div>
+            <div class="stat-label">Stops</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value" id="stat-distance">—</div>
+            <div class="stat-label">Est. km</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value" id="stat-duration">—</div>
+            <div class="stat-label">Est. time</div>
+          </div>
+        </div>
+        <div id="stat-no-route" class="stat-note">Optimize a route first to see distance and time estimates.</div>
+      </div>
+
+      <!-- Fuel Calculator -->
+      <div class="card">
+        <div class="card-title">Fuel Calculator</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Avg Consumption (km/L)</label>
+            <input type="number" id="fuel-kmpl" placeholder="e.g. 12" min="1" max="50" step="0.1">
+          </div>
+          <div class="form-group">
+            <label>Petrol Price (S$/L)</label>
+            <input type="number" id="fuel-price" placeholder="e.g. 2.90" min="0" step="0.01">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Avg Speed Override (km/h)</label>
+          <input type="number" id="avg-speed" placeholder="Default: 30" min="10" max="80" step="1">
+        </div>
+        <div class="fuel-result" id="fuel-result">
+          <div class="fuel-row">
+            <span>Distance (optimized route)</span>
+            <span id="fr-distance">—</span>
+          </div>
+          <div class="fuel-row">
+            <span>Estimated litres used</span>
+            <span id="fr-litres">—</span>
+          </div>
+          <div class="fuel-row fuel-total">
+            <span>Estimated fuel cost</span>
+            <span id="fr-cost">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Jobs Breakdown -->
+      <div class="card">
+        <div class="card-title">Jobs Breakdown</div>
+        <div id="jobs-breakdown"></div>
+      </div>
+
+    </div><!-- /stats -->
+
+  </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js?v=2"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js');
+    });
+  }
+</script>
+</body>
+</html>
