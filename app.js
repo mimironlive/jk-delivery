@@ -632,7 +632,10 @@ function jobCardHTML(job, pickupCounts = {}) {
   // Pickup status
   const pickupAction = job.status === 'pending'
     ? `<button class="btn-status btn-pickup" onclick="setPickedUp('${job.id}')">✓ Picked Up</button>`
-    : `<span style="font-size:11px;color:var(--success);font-weight:700">✓ Picked Up</span>`;
+    : `<span style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;color:var(--success);font-weight:700">✓ Picked Up</span>
+        <button class="btn-revert" onclick="revertJob('${job.id}')" title="Undo">↩ Undo</button>
+       </span>`;
 
   // Dropoff rows — one per dropoff
   const dropoffRows = job.dropoffs.map((d, i) => {
@@ -644,7 +647,10 @@ function jobCardHTML(job, pickupCounts = {}) {
     if (job.status === 'picked_up' && !isDelivered) {
       deliverBtn = `<button class="btn-status btn-deliver" style="margin-top:5px;font-size:11px;padding:5px 10px" onclick="setDropoffDelivered('${job.id}','${d.id}')">✓ Delivered</button>`;
     } else if (isDelivered) {
-      deliverBtn = `<span style="font-size:11px;color:var(--success);font-weight:700;margin-top:4px;display:block">✓ Done</span>`;
+      deliverBtn = `<span style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <span style="font-size:11px;color:var(--success);font-weight:700">✓ Done</span>
+        <button class="btn-revert" onclick="revertDropoff('${job.id}','${d.id}')" title="Undo">↩ Undo</button>
+      </span>`;
     }
 
     return `
@@ -773,7 +779,10 @@ function renderRoute() {
     <div class="route-stop-meta">${postal}${stop.job.contractor ? ' · ' + stop.job.contractor : ''}${stop.job.orderType ? ' · ' + stop.job.orderType : ''}${stop.job.note ? ' · ' + escHtml(stop.job.note) : ''}</div>
     ${etaHtml}
   </div>
-  <button class="btn-nav-sm" onclick="navTo(${stop.lat},${stop.lng})" style="flex-shrink:0">↗</button>
+  <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+    <button class="btn-nav-sm" onclick="navTo(${stop.lat},${stop.lng})">↗</button>
+    ${isDone ? `<button class="btn-revert" onclick="${stop.type === 'pickup' ? `revertJob('${stop.job.id}')` : `revertDropoff('${stop.job.id}','${stop.dropoffId}')`}" title="Undo">↩</button>` : ''}
+  </div>
 </div>`;
   }).join('');
 }
@@ -1067,6 +1076,27 @@ function setDropoffDelivered(jobId, dropoffId) {
   renderNext();
   renderJobs();
   renderRoute();
+}
+
+function revertJob(jobId) {
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.status = 'pending';
+  job.dropoffs.forEach(d => { d.status = 'pending'; });
+  state.optimizedRoute = [];
+  save(); renderNext(); renderJobs(); renderRoute();
+  toast('Job reset to Pending');
+}
+
+function revertDropoff(jobId, dropoffId) {
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  const dropoff = job.dropoffs.find(d => d.id === dropoffId);
+  if (!dropoff) return;
+  dropoff.status = 'pending';
+  if (job.status === 'delivered') job.status = 'picked_up';
+  save(); renderNext(); renderJobs(); renderRoute();
+  toast('Dropoff reset to Pending');
 }
 
 function deleteJob(jobId) {

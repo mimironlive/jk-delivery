@@ -418,6 +418,20 @@ select:focus {
 
 .btn-pickup  { background: #dcfce7; color: var(--success); }
 .btn-deliver { background: #dbeafe; color: var(--primary); }
+.btn-revert {
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-revert:active { background: #e2e8f0; }
+
 .btn-nav-sm  {
   background: #f1f5f9;
   color: var(--muted);
