@@ -743,20 +743,44 @@ select:focus {
 }
 
 /* Action buttons */
+.next-nav-row {
+  display: flex;
+  gap: 8px;
+}
+
 .next-nav-btn {
   background: var(--primary);
   color: white;
   border: none;
   border-radius: 12px;
   padding: 16px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+.next-nav-btn.waze {
+  background: #05c8f7;
+  color: #003087;
+}
+
+/* Batch badge */
+.batch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: #fef3c7;
+  color: var(--warning);
+  border: 1px solid #fde68a;
 }
 
 .next-status-btn {

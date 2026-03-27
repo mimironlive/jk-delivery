@@ -548,7 +548,10 @@ function renderNext() {
         ${hasTimeInfo ? `<div class="next-time-block">${etaRow}${travelRow}${windowRow}${deadlineRow}</div>` : ''}
         ${equipHtml}
         ${job.note ? `<div class="next-note">📝 ${escHtml(job.note)}</div>` : ''}
-        <button class="next-nav-btn" onclick="navTo(${lat},${lng})">↗ Navigate</button>
+        <div class="next-nav-row">
+          <button class="next-nav-btn waze" onclick="navToWaze(${lat},${lng})">🚗 Waze</button>
+          <button class="next-nav-btn" onclick="navTo(${lat},${lng})">🗺 Maps</button>
+        </div>
         ${actionBtn}
       </div>
     </div>
@@ -588,10 +591,16 @@ function renderJobs() {
     return;
   }
 
+  // Compute same-pickup groups among pending jobs
+  const pickupCounts = {};
+  pending.forEach(j => {
+    pickupCounts[j.pickup.postal] = (pickupCounts[j.pickup.postal] || 0) + 1;
+  });
+
   let html = '';
-  if (pending.length)   { html += `<div class="section-label">Pending (${pending.length})</div>`;   html += pending.map(jobCardHTML).join(''); }
-  if (pickedUp.length)  { html += `<div class="section-label">Picked Up (${pickedUp.length})</div>`; html += pickedUp.map(jobCardHTML).join(''); }
-  if (delivered.length) { html += `<div class="section-label">Delivered (${delivered.length})</div>`; html += delivered.map(jobCardHTML).join(''); }
+  if (pending.length)   { html += `<div class="section-label">Pending (${pending.length})</div>`;    html += pending.map(j => jobCardHTML(j, pickupCounts)).join(''); }
+  if (pickedUp.length)  { html += `<div class="section-label">Picked Up (${pickedUp.length})</div>`; html += pickedUp.map(j => jobCardHTML(j, {})).join(''); }
+  if (delivered.length) { html += `<div class="section-label">Delivered (${delivered.length})</div>`; html += delivered.map(j => jobCardHTML(j, {})).join(''); }
   container.innerHTML = html;
 }
 
@@ -609,7 +618,7 @@ function relativeLabel(d) {
   return { immediate: '⚡ Within 30 min', '1hr': '⏱ Within 1 hr', '3hr': '⏱ Within 3 hrs' }[d.dropoffRelative] || '';
 }
 
-function jobCardHTML(job) {
+function jobCardHTML(job, pickupCounts = {}) {
   const cls         = job.contractor ? job.contractor.toLowerCase() : '';
   const statusClass = { pending: '', picked_up: 'status-picked-up', delivered: 'status-delivered' }[job.status];
   const svcCls      = job.orderType ? job.orderType.toLowerCase() : '';
@@ -655,6 +664,11 @@ function jobCardHTML(job) {
     ? `<span style="font-size:11px;color:var(--muted);font-weight:600">${job.dropoffs.length} dropoffs</span>`
     : '';
 
+  const batchCount = pickupCounts[job.pickup.postal] || 0;
+  const batchBadge = batchCount > 1
+    ? `<span class="batch-badge">📦 Batch ×${batchCount}</span>`
+    : '';
+
   const payBadge = job.pay != null
     ? `<span style="font-size:11px;font-weight:700;color:var(--success);background:#dcfce7;padding:2px 8px;border-radius:99px">S$ ${job.pay.toFixed(2)}</span>`
     : '';
@@ -665,6 +679,7 @@ function jobCardHTML(job) {
     <span class="contractor-badge ${cls}">${job.contractor || 'No Contractor'}</span>
     ${job.orderType ? `<span class="service-badge ${svcCls}">${job.orderType}</span>` : ''}
     ${multiLabel}
+    ${batchBadge}
     ${payBadge}
     <span class="job-header-right"><button class="job-delete-btn" onclick="deleteJob('${job.id}')" title="Delete">✕</button></span>
   </div>
@@ -696,6 +711,8 @@ function renderRoute() {
   const summary = document.getElementById('route-summary');
   const active  = state.jobs.filter(j => j.status !== 'delivered');
 
+  const fullRouteBtn = document.getElementById('open-full-route-btn');
+
   if (state.optimizedRoute.length === 0) {
     summary.textContent = active.length === 0
       ? 'No active jobs.'
@@ -703,8 +720,11 @@ function renderRoute() {
     list.innerHTML = active.length === 0
       ? `<div class="empty-state"><div class="empty-icon">🎉</div><p>All jobs completed!</p></div>`
       : '';
+    if (fullRouteBtn) fullRouteBtn.classList.add('hidden');
     return;
   }
+
+  if (fullRouteBtn) fullRouteBtn.classList.remove('hidden');
 
   const speed     = state.avgSpeed || DEFAULT_SPEED;
   const km        = totalRouteKm(state.optimizedRoute);
@@ -880,6 +900,7 @@ function createDropoffEntry(idx) {
   div.querySelector('.dropoff-relative').addEventListener('change', e => {
     div.querySelector('.dropoff-custom-tw').style.display = e.target.value === 'custom' ? 'grid' : 'none';
   });
+  attachClipboard(div.querySelector('.dropoff-postal'));
   div.querySelector('.remove-dropoff-btn').addEventListener('click', () => {
     div.remove();
     refreshDropoffLabels();
@@ -1134,6 +1155,32 @@ function navTo(lat, lng) {
   window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
 }
 
+function navToWaze(lat, lng) {
+  window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+}
+
+function openFullRoute() {
+  const remaining = state.optimizedRoute.filter(s => !stopIsDone(s));
+  if (remaining.length === 0) { toast('No remaining stops'); return; }
+
+  const MAX = 10;
+  const stops = remaining.slice(0, MAX);
+  const sl = state.startLocation;
+
+  const dest = `${stops[stops.length - 1].lat},${stops[stops.length - 1].lng}`;
+  let wps = '';
+  if (sl) {
+    wps = stops.slice(0, -1).map(s => `${s.lat},${s.lng}`).join('|');
+  } else {
+    wps = stops.slice(1, -1).map(s => `${s.lat},${s.lng}`).join('|');
+  }
+  const origin = sl ? `&origin=${sl.lat},${sl.lng}` : '';
+  const url = `https://www.google.com/maps/dir/?api=1${origin}&destination=${dest}${wps ? '&waypoints=' + encodeURIComponent(wps) : ''}`;
+
+  window.open(url, '_blank');
+  if (remaining.length > MAX) toast(`Showing first ${MAX} of ${remaining.length} stops`);
+}
+
 // ─── Fuel inputs (live) ───────────────────────────────────────────────────────
 
 function initFuelInputs() {
@@ -1193,6 +1240,25 @@ function initFormToggle() {
   });
 }
 
+// ─── Clipboard postal detection ───────────────────────────────────────────────
+
+async function tryPastePostal(inputEl) {
+  if (inputEl.value !== '') return;
+  try {
+    const text = await navigator.clipboard.readText();
+    const match = text.match(/\b(\d{6})\b/);
+    if (match) {
+      inputEl.value = match[1];
+      inputEl.dispatchEvent(new Event('input'));
+      toast(`📋 Postal ${match[1]} filled from clipboard`);
+    }
+  } catch (e) { /* permission denied — silently skip */ }
+}
+
+function attachClipboard(inputEl) {
+  inputEl.addEventListener('focus', () => tryPastePostal(inputEl));
+}
+
 // ─── Equipment toggles ────────────────────────────────────────────────────────
 
 function initEquipToggles() {
@@ -1231,6 +1297,9 @@ function init() {
   document.getElementById('start-postal').addEventListener('keydown', e => {
     if (e.key === 'Enter') handleSetLocation();
   });
+
+  // Clipboard detection on pickup postal
+  attachClipboard(document.getElementById('pickup-postal'));
 
   // Auto-advance to first dropoff postal after 6 digits typed in pickup
   document.getElementById('pickup-postal').addEventListener('input', e => {
