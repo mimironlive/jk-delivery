@@ -68,6 +68,26 @@ function load() {
   } catch (e) { /* ignore */ }
 }
 
+// ─── History helpers ──────────────────────────────────────────────────────────
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function fmtDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('jkd_history') || '{}'); }
+  catch { return {}; }
+}
+
+function saveHistory(h) {
+  localStorage.setItem('jkd_history', JSON.stringify(h));
+}
+
 // ─── Time helpers ─────────────────────────────────────────────────────────────
 
 function timeToMins(hhmm) {
@@ -886,6 +906,8 @@ function renderStats() {
     { label: 'Delivered', count: done,              color: '#16a34a' },
   ];
   const max = Math.max(total, 1);
+  renderHistory();
+
   document.getElementById('jobs-breakdown').innerHTML = breakdown.map(row => `
 <div class="breakdown-row">
   <span class="breakdown-label">${row.label}</span>
@@ -1243,6 +1265,140 @@ function openFullRoute() {
   if (remaining.length > MAX) toast(`Showing first ${MAX} of ${remaining.length} stops`);
 }
 
+// ─── Archive / End of Day ─────────────────────────────────────────────────────
+
+function archiveDay() {
+  const delivered = state.jobs.filter(j => j.status === 'delivered');
+  if (delivered.length === 0) { toast('No delivered jobs to archive'); return; }
+  if (!confirm(`Archive ${delivered.length} delivered job(s) and clear them from today?`)) return;
+
+  const date     = todayStr();
+  const history  = loadHistory();
+  const earnings = delivered.reduce((s, j) => s + (j.pay || 0), 0);
+  const km       = state.optimizedRoute.length > 0 ? totalRouteKm(state.optimizedRoute) : 0;
+  const fuelCost = (km > 0 && state.fuelKmpl > 0 && state.fuelPrice > 0)
+    ? (km / state.fuelKmpl) * state.fuelPrice : 0;
+
+  const existing = history[date] || { jobs: [], earnings: 0, fuelCost: 0, jobCount: 0, routeKm: 0 };
+  history[date] = {
+    date,
+    jobs:     [...existing.jobs, ...delivered],
+    earnings: existing.earnings + earnings,
+    fuelCost: existing.fuelCost + fuelCost,
+    jobCount: existing.jobCount + delivered.length,
+    routeKm:  km > 0 ? km : existing.routeKm,
+  };
+
+  saveHistory(history);
+  state.jobs           = state.jobs.filter(j => j.status !== 'delivered');
+  state.optimizedRoute = [];
+  save();
+  renderJobs(); renderRoute(); renderNext(); renderStats();
+  toast(`Archived ${delivered.length} job(s) ✓`);
+}
+
+// ─── CSV Export ───────────────────────────────────────────────────────────────
+
+function exportCSV(dateStr) {
+  const history = loadHistory();
+  const jobs    = dateStr ? (history[dateStr]?.jobs || []) : state.jobs;
+  const label   = dateStr || todayStr();
+
+  if (jobs.length === 0) { toast('No jobs to export'); return; }
+
+  const rows = [['Date','Contractor','Service','Reference','Pickup Postal','Pickup Address','Dropoff Postal','Dropoff Address','Pay (S$)','Status','Equipment','Note']];
+  jobs.forEach(job => {
+    job.dropoffs.forEach(d => {
+      rows.push([
+        label,
+        job.contractor  || '',
+        job.orderType   || '',
+        job.refNo       || '',
+        job.pickup.postal,
+        job.pickup.address,
+        d.postal,
+        d.address,
+        job.pay != null ? job.pay.toFixed(2) : '',
+        d.status,
+        (job.equipment || []).join('; '),
+        job.note || '',
+      ]);
+    });
+  });
+
+  const csv  = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `jk-delivery-${label}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`Exported ${jobs.length} job(s) ✓`);
+}
+
+// ─── Render: History ──────────────────────────────────────────────────────────
+
+function renderHistory() {
+  const history  = loadHistory();
+  const chartEl  = document.getElementById('history-chart');
+  const tableEl  = document.getElementById('history-table');
+  if (!chartEl || !tableEl) return;
+
+  // Build last 7 days (including today)
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    days.push({ key, data: history[key] || null });
+  }
+
+  const maxEarnings = Math.max(...days.map(d => d.data?.earnings || 0), 1);
+
+  // Bar chart
+  chartEl.innerHTML = days.map(({ key, data }) => {
+    const earningsPct = data ? Math.round((data.earnings / maxEarnings) * 100) : 0;
+    const fuelPct     = data ? Math.round(((data.fuelCost || 0) / maxEarnings) * 100) : 0;
+    const isToday     = key === todayStr();
+    const label       = new Date(key + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short' });
+    return `
+      <div class="hbar-group ${isToday ? 'hbar-today' : ''}">
+        <div class="hbar-bars">
+          <div class="hbar earnings" style="height:${earningsPct}%" title="S$ ${(data?.earnings||0).toFixed(2)}"></div>
+          <div class="hbar fuel"     style="height:${fuelPct}%"     title="Fuel S$ ${(data?.fuelCost||0).toFixed(2)}"></div>
+        </div>
+        <div class="hbar-label">${label}${isToday ? '*' : ''}</div>
+      </div>`;
+  }).join('');
+
+  // Table
+  const hasAny = days.some(d => d.data);
+  if (!hasAny) {
+    tableEl.innerHTML = `<p style="font-size:12px;color:var(--muted);text-align:center;padding:8px 0">No history yet — archive a day to see it here.</p>`;
+    return;
+  }
+
+  tableEl.innerHTML = `
+    <table class="history-table">
+      <thead><tr><th>Date</th><th>Jobs</th><th>Earnings</th><th>Fuel</th><th>Profit</th><th></th></tr></thead>
+      <tbody>
+        ${days.filter(d => d.data).reverse().map(({ key, data }) => {
+          const profit = (data.earnings || 0) - (data.fuelCost || 0);
+          const profitColor = profit >= 0 ? 'var(--success)' : 'var(--danger)';
+          return `<tr>
+            <td>${fmtDateLabel(key)}</td>
+            <td>${data.jobCount}</td>
+            <td>S$ ${(data.earnings||0).toFixed(2)}</td>
+            <td>S$ ${(data.fuelCost||0).toFixed(2)}</td>
+            <td style="color:${profitColor};font-weight:700">S$ ${profit.toFixed(2)}</td>
+            <td><button class="btn btn-outline btn-sm" style="padding:4px 8px;font-size:11px" onclick="exportCSV('${key}')">⬇</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
 // ─── Fuel inputs (live) ───────────────────────────────────────────────────────
 
 function initFuelInputs() {
@@ -1355,6 +1511,7 @@ function init() {
   document.getElementById('set-location-btn').addEventListener('click', handleSetLocation);
   document.getElementById('use-gps-btn').addEventListener('click', handleGPS);
   document.getElementById('clear-all-btn').addEventListener('click', handleClearCompleted);
+  document.getElementById('end-of-day-btn').addEventListener('click', archiveDay);
 
   document.getElementById('start-postal').addEventListener('keydown', e => {
     if (e.key === 'Enter') handleSetLocation();

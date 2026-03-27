@@ -248,6 +248,21 @@
         <div id="jobs-breakdown"></div>
       </div>
 
+      <!-- History -->
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">Past 7 Days</span>
+          <button class="btn btn-outline btn-sm" onclick="exportCSV(null)">⬇ Export Today</button>
+        </div>
+        <div id="history-chart" class="history-chart"></div>
+        <div id="history-table"></div>
+      </div>
+
+      <!-- End of Day -->
+      <div style="padding-bottom:8px;flex-shrink:0">
+        <button id="end-of-day-btn" class="btn btn-end-of-day">🌙 End of Day — Archive &amp; Reset</button>
+      </div>
+
     </div><!-- /stats -->
 
   </main>

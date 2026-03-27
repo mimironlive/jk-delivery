@@ -1086,6 +1086,101 @@ select:focus {
   transition: width 0.4s ease;
 }
 
+/* ── History chart ──────────────────────────── */
+
+.history-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 80px;
+  margin-bottom: 14px;
+  padding: 0 2px;
+}
+
+.hbar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.hbar-today .hbar-label { color: var(--primary); font-weight: 700; }
+
+.hbar-bars {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.hbar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+
+.hbar.earnings { background: var(--success); opacity: 0.85; }
+.hbar.fuel     { background: var(--warning);  opacity: 0.75; }
+
+.hbar-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ── History table ──────────────────────────── */
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.history-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-table td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.history-table tr:last-child td { border-bottom: none; }
+
+/* ── End of Day button ──────────────────────── */
+
+.btn-end-of-day {
+  width: 100%;
+  padding: 14px;
+  background: #1e293b;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-end-of-day:active { opacity: 0.85; }
+
 .breakdown-count {
   font-weight: 700;
   min-width: 24px;
