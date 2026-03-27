@@ -493,6 +493,8 @@ function renderNext() {
     <div class="next-badges">
       ${job.contractor ? `<span class="contractor-badge ${cls}">${job.contractor}</span>` : ''}
       ${job.orderType  ? `<span class="service-badge ${svcCls}">${job.orderType}</span>`  : ''}
+      ${job.refNo      ? `<span style="font-size:11px;font-weight:600;color:var(--muted)">🔖 ${escHtml(job.refNo)}</span>` : ''}
+      ${job.pay != null ? `<span style="font-size:11px;font-weight:700;color:var(--success);background:#dcfce7;padding:2px 8px;border-radius:99px">S$ ${job.pay.toFixed(2)}</span>` : ''}
       ${dropoffLabel   ? `<span style="font-size:11px;font-weight:600;color:var(--muted)">${dropoffLabel}</span>` : ''}
     </div>`;
 
@@ -653,14 +655,20 @@ function jobCardHTML(job) {
     ? `<span style="font-size:11px;color:var(--muted);font-weight:600">${job.dropoffs.length} dropoffs</span>`
     : '';
 
+  const payBadge = job.pay != null
+    ? `<span style="font-size:11px;font-weight:700;color:var(--success);background:#dcfce7;padding:2px 8px;border-radius:99px">S$ ${job.pay.toFixed(2)}</span>`
+    : '';
+
   return `
 <div class="job-card ${statusClass}">
   <div class="job-header">
     <span class="contractor-badge ${cls}">${job.contractor || 'No Contractor'}</span>
     ${job.orderType ? `<span class="service-badge ${svcCls}">${job.orderType}</span>` : ''}
     ${multiLabel}
+    ${payBadge}
     <span class="job-header-right"><button class="job-delete-btn" onclick="deleteJob('${job.id}')" title="Delete">✕</button></span>
   </div>
+  ${job.refNo ? `<div class="job-note" style="font-size:11px">🔖 Ref: <b>${escHtml(job.refNo)}</b></div>` : ''}
   ${equipTags ? `<div class="job-note" style="margin-bottom:6px">${equipTags}</div>` : ''}
   ${job.note ? `<div class="job-note">📝 ${escHtml(job.note)}</div>` : ''}
   <div class="job-stops">
@@ -793,6 +801,24 @@ function renderStats() {
     document.getElementById('fr-cost').textContent     = '—';
   }
 
+  // Earnings summary
+  const totalEarnings = state.jobs.reduce((sum, j) => sum + (j.pay || 0), 0);
+  const fuelCostVal   = (hasRoute && state.fuelKmpl > 0 && state.fuelPrice > 0)
+    ? (totalRouteKm(state.optimizedRoute) / state.fuelKmpl) * state.fuelPrice
+    : null;
+  const profit = (totalEarnings > 0 && fuelCostVal != null) ? totalEarnings - fuelCostVal : null;
+
+  document.getElementById('er-earnings').textContent = totalEarnings > 0  ? `S$ ${totalEarnings.toFixed(2)}` : '—';
+  document.getElementById('er-fuel').textContent     = fuelCostVal != null ? `S$ ${fuelCostVal.toFixed(2)}`  : '—';
+  const profitEl = document.getElementById('er-profit');
+  if (profit != null) {
+    profitEl.textContent = `S$ ${profit.toFixed(2)}`;
+    profitEl.style.color = profit >= 0 ? 'var(--success)' : 'var(--danger)';
+  } else {
+    profitEl.textContent = '—';
+    profitEl.style.color = '';
+  }
+
   const breakdown = [
     { label: 'Pending',   count: pending,          color: '#2563eb' },
     { label: 'Picked Up', count: active - pending,  color: '#d97706' },
@@ -917,6 +943,8 @@ function escHtml(str) {
 async function handleAddJob() {
   const contractor    = document.getElementById('contractor').value;
   const orderType     = document.getElementById('order-type').value;
+  const refNo         = document.getElementById('job-ref').value.trim();
+  const pay           = parseFloat(document.getElementById('job-pay').value) || null;
   const pickupPostal  = document.getElementById('pickup-postal').value.trim();
   const pickupTwStart = document.getElementById('pickup-tw-start').value;
   const pickupTwEnd   = document.getElementById('pickup-tw-end').value;
@@ -964,6 +992,8 @@ async function handleAddJob() {
     state.jobs.push({
       id: uid(),
       contractor, orderType,
+      refNo:          refNo || null,
+      pay,
       pickup:         pickupResult,
       dropoffs,
       pickupTwStart:  pickupTwStart || null,
@@ -980,7 +1010,7 @@ async function handleAddJob() {
     renderRoute();
 
     // Reset form
-    ['pickup-postal', 'pickup-tw-start', 'pickup-tw-end', 'job-note']
+    ['pickup-postal', 'pickup-tw-start', 'pickup-tw-end', 'job-note', 'job-ref', 'job-pay']
       .forEach(id => { document.getElementById(id).value = ''; });
     document.querySelectorAll('.equip-btn.active').forEach(b => b.classList.remove('active'));
     resetDropoffEntries();
