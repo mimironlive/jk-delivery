@@ -1399,6 +1399,197 @@ function renderHistory() {
     </table>`;
 }
 
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+function openSettings() {
+  const overlay = document.getElementById('settings-overlay');
+  overlay.classList.remove('hidden');
+  const stored = localStorage.getItem('jkd_api_key') || '';
+  document.getElementById('api-key-input').value = stored;
+  refreshApiKeyStatus();
+}
+
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.add('hidden');
+}
+
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (key && !key.startsWith('sk-ant-')) {
+    toast('That doesn\'t look like a valid Anthropic key');
+    return;
+  }
+  if (key) {
+    localStorage.setItem('jkd_api_key', key);
+    toast('API key saved ✓');
+  } else {
+    localStorage.removeItem('jkd_api_key');
+    toast('No key entered — nothing saved');
+  }
+  refreshApiKeyStatus();
+}
+
+function clearApiKey() {
+  localStorage.removeItem('jkd_api_key');
+  document.getElementById('api-key-input').value = '';
+  refreshApiKeyStatus();
+  toast('API key cleared');
+}
+
+function toggleKeyVisibility() {
+  const inp = document.getElementById('api-key-input');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function refreshApiKeyStatus() {
+  const el  = document.getElementById('api-key-status');
+  if (!el) return;
+  const key = localStorage.getItem('jkd_api_key');
+  if (key) {
+    el.textContent = '✓ API key is set — screenshot scanning enabled';
+    el.style.color  = 'var(--success)';
+  } else {
+    el.textContent = '⚠ No API key — screenshot scanning disabled';
+    el.style.color  = 'var(--warning)';
+  }
+}
+
+// ─── Screenshot scanning (Claude Vision) ──────────────────────────────────────
+
+function handleScanFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const apiKey = localStorage.getItem('jkd_api_key');
+  if (!apiKey) {
+    toast('Set your API key in ⚙️ Settings first');
+    input.value = '';
+    return;
+  }
+
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.textContent = '🔍 Scanning…';
+
+  fileToBase64(file)
+    .then(base64 => callClaudeVision(base64, file.type || 'image/jpeg', apiKey))
+    .then(data => {
+      applyScannedData(data);
+      toast('✓ Details extracted — please review and confirm');
+    })
+    .catch(err => {
+      toast('Scan failed: ' + err.message);
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = '📷 Scan Screenshot';
+      input.value = '';
+    });
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function callClaudeVision(base64Data, mediaType, apiKey) {
+  const prompt = `You are helping a delivery driver in Singapore extract order details from a screenshot of a delivery app (Lalamove, UParcel, or GOGOX).
+
+Extract the following and return ONLY a valid JSON object — no markdown, no explanation:
+{
+  "contractor": "Lalamove" or "UParcel" or "GOGOX" or "",
+  "refNo": "order or tracking number if visible, else empty string",
+  "pickupPostal": "exactly 6-digit Singapore postal code for the pickup address, else empty string",
+  "dropoffPostal": "exactly 6-digit Singapore postal code for the dropoff/delivery address, else empty string",
+  "pay": numeric SGD value if a delivery fee is shown (e.g. 8.50), else null,
+  "pickupTimeFrom": "HH:MM in 24h format if a pickup window start is shown, else empty string",
+  "pickupTimeTo": "HH:MM in 24h format if a pickup window end is shown, else empty string",
+  "equipment": array of zero or more items from ["trolley", "food bag"] if indicated, else [],
+  "note": "special delivery instructions if any, else empty string"
+}
+
+Singapore postal codes are always exactly 6 digits. Return only the JSON object.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-calls': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-6',
+      max_tokens: 512,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+          { type: 'text', text: prompt },
+        ],
+      }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${res.status}`);
+  }
+
+  const data  = await res.json();
+  const raw   = (data.content?.[0]?.text || '').trim();
+  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  return JSON.parse(clean);
+}
+
+function applyScannedData(data) {
+  if (!data) return;
+
+  if (data.contractor) {
+    const sel = document.getElementById('contractor');
+    if ([...sel.options].some(o => o.value === data.contractor)) sel.value = data.contractor;
+  }
+  if (data.refNo) {
+    const el = document.getElementById('job-ref');
+    if (el) el.value = data.refNo;
+  }
+  if (data.pay != null) {
+    const el = document.getElementById('job-pay');
+    if (el) el.value = Number(data.pay).toFixed(2);
+  }
+  if (data.pickupPostal) {
+    const el = document.getElementById('pickup-postal');
+    if (el) el.value = data.pickupPostal;
+  }
+  if (data.pickupTimeFrom) {
+    const el = document.getElementById('pickup-tw-start');
+    if (el) el.value = data.pickupTimeFrom;
+  }
+  if (data.pickupTimeTo) {
+    const el = document.getElementById('pickup-tw-end');
+    if (el) el.value = data.pickupTimeTo;
+  }
+  if (data.dropoffPostal) {
+    const first = document.querySelector('.dropoff-postal');
+    if (first) first.value = data.dropoffPostal;
+  }
+  if (Array.isArray(data.equipment)) {
+    document.querySelectorAll('.equip-btn').forEach(b => b.classList.remove('active'));
+    data.equipment.forEach(item => {
+      const btn = document.querySelector(`.equip-btn[data-equip="${item.toLowerCase()}"]`);
+      if (btn) btn.classList.add('active');
+    });
+  }
+  if (data.note) {
+    const el = document.getElementById('job-note');
+    if (el) el.value = data.note;
+  }
+}
+
 // ─── Fuel inputs (live) ───────────────────────────────────────────────────────
 
 function initFuelInputs() {

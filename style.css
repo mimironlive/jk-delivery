@@ -1086,6 +1086,85 @@ select:focus {
   transition: width 0.4s ease;
 }
 
+/* ── Settings ───────────────────────────────── */
+
+.header-settings-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  opacity: 0.85;
+  transition: opacity 0.2s;
+  margin-left: auto;
+}
+.header-settings-btn:active { opacity: 0.5; }
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+}
+.settings-overlay.hidden { display: none; }
+
+.settings-sheet {
+  background: var(--card);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px 32px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.settings-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.api-key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.api-key-row input { flex: 1; font-family: monospace; font-size: 13px; }
+
+.api-key-status {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
+  min-height: 18px;
+}
+
+/* ── Scan button ─────────────────────────────── */
+
+.btn-scan {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.btn-scan:active { opacity: 0.85; }
+.btn-scan:disabled { opacity: 0.6; }
+
 /* ── History chart ──────────────────────────── */
 
 .history-chart {

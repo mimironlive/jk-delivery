@@ -20,7 +20,29 @@
   <header>
     <span class="header-title">📦 JK Delivery</span>
     <span id="header-badge" class="header-badge hidden"></span>
+    <button class="header-settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
   </header>
+
+  <!-- Settings Overlay -->
+  <div id="settings-overlay" class="settings-overlay hidden" onclick="closeSettings()">
+    <div class="settings-sheet" onclick="event.stopPropagation()">
+      <div class="settings-sheet-header">
+        <span class="card-title">Settings</span>
+        <button class="btn-icon" onclick="closeSettings()">✕</button>
+      </div>
+      <div class="form-group">
+        <label>Anthropic API Key</label>
+        <div class="api-key-row">
+          <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
+          <button class="btn btn-outline btn-sm" onclick="toggleKeyVisibility()">👁</button>
+        </div>
+        <p class="field-hint">Used only for screenshot scanning. Stored locally on this device — never uploaded anywhere.</p>
+        <div id="api-key-status" class="api-key-status"></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveApiKey()">Save API Key</button>
+      <button class="btn btn-outline" style="margin-top:8px" onclick="clearApiKey()">Clear Key</button>
+    </div>
+  </div>
 
   <!-- Tabs -->
   <nav class="tabs">
@@ -60,6 +82,13 @@
           <button id="toggle-form-btn" class="btn btn-outline btn-sm">▲ Collapse</button>
         </div>
         <div id="add-job-form">
+
+          <!-- Scan Screenshot -->
+          <input type="file" id="scan-input" accept="image/*" style="display:none" onchange="handleScanFile(this)">
+          <button type="button" id="scan-btn" class="btn btn-scan" onclick="document.getElementById('scan-input').click()">
+            📷 Scan Screenshot
+          </button>
+          <p class="field-hint" style="text-align:center;margin-bottom:12px">Auto-fill from a Lalamove / UParcel / GOGOX screenshot</p>
 
           <div class="form-row">
             <div class="form-group">
