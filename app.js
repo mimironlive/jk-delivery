@@ -1514,13 +1514,12 @@ Extract the following and return ONLY a valid JSON object — no markdown, no ex
 
 Singapore postal codes are always exactly 6 digits. Return only the JSON object.`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('https://jk-proxy.jaredkang-drive.workers.dev/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-calls': 'true',
     },
     body: JSON.stringify({
       model: 'claude-opus-4-6',
