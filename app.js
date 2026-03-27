@@ -1478,7 +1478,12 @@ function handleScanFile(input) {
       toast('✓ Details extracted — please review and confirm');
     })
     .catch(err => {
-      toast('Scan failed: ' + err.message);
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('overload') || msg.includes('529')) {
+        toast('Anthropic is busy — please try again in a moment');
+      } else {
+        toast('Scan failed: ' + msg);
+      }
     })
     .finally(() => {
       btn.disabled = false;
@@ -1522,7 +1527,7 @@ Singapore postal codes are always exactly 6 digits. Return only the JSON object.
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-6',
+      model: 'claude-haiku-4-5',
       max_tokens: 512,
       messages: [{
         role: 'user',
