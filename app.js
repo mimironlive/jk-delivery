@@ -448,7 +448,8 @@ function renderNext() {
     dropoffLabel = `Dropoff ${idx + 1} of ${job.dropoffs.length}`;
   }
 
-  const stopIdx        = state.optimizedRoute.indexOf(stop) + 1;
+  const stopIdx0       = state.optimizedRoute.indexOf(stop);
+  const stopIdx        = stopIdx0 + 1;
   const totalRemaining = state.optimizedRoute.filter(s => {
     if (s.type === 'pickup')  return s.job.status === 'pending';
     if (s.type === 'dropoff') return s.dropoff ? s.dropoff.status !== 'delivered' : s.job.status !== 'delivered';
@@ -516,7 +517,36 @@ function renderNext() {
     ? `<button class="next-status-btn pickup"  onclick="setPickedUp('${job.id}')">✓ Picked Up</button>`
     : `<button class="next-status-btn dropoff" onclick="setDropoffDelivered('${job.id}','${stop.dropoffId}')">✓ Delivered</button>`;
 
-  const nextIdx  = state.optimizedRoute.indexOf(stop) + 1;
+  // Batch alert — multiple pending pickups at same postal
+  const batchHtml = isPickup ? (() => {
+    const batchCount = state.jobs.filter(j =>
+      j.status === 'pending' && j.pickup.postal === postal
+    ).length;
+    return batchCount > 1
+      ? `<div class="next-batch-alert">📦 ${batchCount} orders to collect at this location — pick up all before leaving</div>`
+      : '';
+  })() : '';
+
+  // Before This — previous completed stop with ↩ Undo
+  const prevStop  = stopIdx0 > 0 ? state.optimizedRoute[stopIdx0 - 1] : null;
+  const beforeHtml = (prevStop && stopIsDone(prevStop)) ? (() => {
+    const pAddr    = stopAddress(prevStop);
+    const pIsPickup = prevStop.type === 'pickup';
+    const undoFn   = pIsPickup
+      ? `revertJob('${prevStop.job.id}')`
+      : `revertDropoff('${prevStop.job.id}','${prevStop.dropoffId}')`;
+    return `
+      <div class="next-before-card">
+        <div class="next-before-title">Before this</div>
+        <div class="next-after-row">
+          <span class="next-after-type ${prevStop.type}">${pIsPickup ? 'Pickup' : 'Dropoff'}</span>
+          <span class="next-after-addr">${escHtml(pAddr)}</span>
+          <button class="btn-revert" onclick="${undoFn}">↩ Undo</button>
+        </div>
+      </div>`;
+  })() : '';
+
+  const nextIdx  = stopIdx0 + 1;
   const afterStop = nextIdx < state.optimizedRoute.length ? state.optimizedRoute[nextIdx] : null;
   const afterHtml = afterStop ? (() => {
     const aIsPickup = afterStop.type === 'pickup';
@@ -534,6 +564,7 @@ function renderNext() {
   })() : '';
 
   container.innerHTML = `
+    ${beforeHtml}
     <div class="next-card">
       <div class="next-card-header ${stop.type}">
         <span class="next-type-label ${stop.type}">${isPickup ? '📦 Pickup' : '🏠 Dropoff'}</span>
@@ -541,6 +572,7 @@ function renderNext() {
       </div>
       <div class="next-card-body">
         ${badgesHtml}
+        ${batchHtml}
         <div>
           <div class="next-address">${escHtml(address)}</div>
           <div class="next-postal">${postal}</div>

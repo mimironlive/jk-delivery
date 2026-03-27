@@ -810,6 +810,35 @@ select:focus {
 .next-status-btn.pickup  { background: #dcfce7; color: var(--success); }
 .next-status-btn.dropoff { background: #dbeafe; color: var(--primary); }
 
+/* Batch alert */
+.next-batch-alert {
+  background: #fef3c7;
+  border: 1.5px solid #fde68a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+/* Before this */
+.next-before-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  flex-shrink: 0;
+}
+
+.next-before-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
 /* After this */
 .next-after-card {
   background: var(--card);
