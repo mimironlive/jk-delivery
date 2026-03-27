@@ -1502,19 +1502,27 @@ function fileToBase64(file) {
 }
 
 async function callClaudeVision(base64Data, mediaType, apiKey) {
-  const prompt = `You are helping a delivery driver in Singapore extract order details from a screenshot of a delivery app (Lalamove, UParcel, or GOGOX).
+  const prompt = `You are helping a delivery driver in Singapore extract order details from a screenshot of a delivery app.
 
-Extract the following and return ONLY a valid JSON object — no markdown, no explanation:
+STEP 1 — IDENTIFY THE CONTRACTOR by visual appearance (do this even if the app name is not visible):
+
+• LALAMOVE: solid ORANGE header bar (~#F5A623, clearly orange not yellow). Route card shows a hollow orange circle (○) for pickup and a solid orange map-pin (●) for dropoff, connected by a dotted vertical line. Price shown as "S$X.XX". Bottom has a wide orange "Slide to Take Order" slider button. Service type appears as a white pill badge. May show "Received by credit" label.
+
+• UPARCEL: GOLDEN/AMBER YELLOW header (~#FFBB00, more yellow than Lalamove's orange). Screen title "Job Details". Two distinct coloured cards: a LIGHT BLUE card labelled "Pickup Details" (with a blue numbered circle ① and blue hourglass icon) and a LIGHT GREEN card labelled "Delivery Details" (with a green numbered circle ① and green hourglass icon). Bottom has "Back" and "Accept" buttons, "Accept" in amber/yellow outline. Shows "Sort Code", service tier in ALL CAPS (e.g. "1 HOUR RUSH"), and a reference like "68-001-XXXXX". Price shown as "$X.XX" (no S prefix).
+
+• GOGOX: if none of the above patterns match, use "GOGOX" only if the UI is clearly a different delivery app. Otherwise leave contractor as "".
+
+STEP 2 — EXTRACT the following fields and return ONLY a valid JSON object — no markdown, no explanation:
 {
   "contractor": "Lalamove" or "UParcel" or "GOGOX" or "",
-  "refNo": "order or tracking number if visible, else empty string",
+  "refNo": "order/tracking/reference number if visible (e.g. LM-12345678 or 68-001-XXXXX), else empty string",
   "pickupPostal": "exactly 6-digit Singapore postal code for the pickup address, else empty string",
   "dropoffPostal": "exactly 6-digit Singapore postal code for the dropoff/delivery address, else empty string",
-  "pay": numeric SGD value if a delivery fee is shown (e.g. 8.50), else null,
-  "pickupTimeFrom": "HH:MM in 24h format if a pickup window start is shown, else empty string",
-  "pickupTimeTo": "HH:MM in 24h format if a pickup window end is shown, else empty string",
-  "equipment": array of zero or more items from ["trolley", "food bag"] if indicated, else [],
-  "note": "special delivery instructions if any, else empty string"
+  "pay": numeric value of the delivery fee if shown (e.g. 8.50 or 17.00), else null,
+  "pickupTimeFrom": "HH:MM in 24h format if a pickup window start time is shown, else empty string",
+  "pickupTimeTo": "HH:MM in 24h format if a pickup window end time is shown, else empty string",
+  "equipment": array of zero or more items from ["trolley", "food bag"] if the remarks mention cold/chilled items or trolley, else [],
+  "note": "special delivery instructions from remarks section if any, else empty string"
 }
 
 Singapore postal codes are always exactly 6 digits. Return only the JSON object.`;
