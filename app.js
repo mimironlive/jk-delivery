@@ -1566,10 +1566,12 @@ async function proxyFetch(url, method = 'GET', headers = {}) {
 
 async function loadHdbCarparks() {
   const cached = JSON.parse(localStorage.getItem(HDB_CP_KEY) || 'null');
-  if (cached && Date.now() - cached.ts < CP_TTL) {
+  if (cached && cached.data?.length > 0 && Date.now() - cached.ts < CP_TTL) {
     console.log('[Parking] HDB from cache:', cached.data.length, 'carparks');
     return cached.data;
   }
+  // Clear any stale/empty cache before re-fetching
+  localStorage.removeItem(HDB_CP_KEY);
 
   console.log('[Parking] Fetching HDB carparks via proxy…');
   // Single request for all ~2300 records — avoids rate-limit from pagination
