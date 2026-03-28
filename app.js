@@ -1573,10 +1573,22 @@ async function loadHdbCarparks() {
   // Clear any stale/empty cache before re-fetching
   localStorage.removeItem(HDB_CP_KEY);
 
-  console.log('[Parking] Fetching HDB carparks via proxy…');
-  // Single request for all ~2300 records — avoids rate-limit from pagination
   const url = `https://data.gov.sg/api/action/datastore_search?resource_id=${HDB_RESOURCE}&limit=5000`;
-  const json = await proxyFetch(url);
+
+  // Try browser-direct first — your device IP won't be rate-limited by data.gov.sg.
+  // Only fall back to proxy if direct fails (proxy IP can be rate-limited).
+  let json;
+  try {
+    console.log('[Parking] Fetching HDB carparks directly…');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    json = await res.json();
+    console.log('[Parking] HDB direct fetch OK');
+  } catch (e) {
+    console.log('[Parking] Direct failed (' + e.message + '), trying proxy…');
+    json = await proxyFetch(url);
+  }
+
   const recs = json?.result?.records || [];
   console.log('[Parking] HDB raw records:', recs.length);
 
