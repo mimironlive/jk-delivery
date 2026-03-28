@@ -915,6 +915,31 @@ select:focus {
 
 .parking-retry:active { opacity: 0.7; }
 
+.parking-src-badge.mall { background: #FFF3E0; color: #E65100; }
+
+.parking-card-mall {
+  background: #FFF8F0;
+  border: 1px solid #FFD9B0;
+}
+
+.parking-card-condo {
+  background: #F5F0FF;
+  border: 1px solid #C9B8F0;
+}
+
+.condo-notice {
+  font-size: 13px;
+  font-weight: 600;
+  color: #5B3FB5;
+  margin-top: 2px;
+}
+
+.parking-disclaimer {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 /* Batch badge */
 .batch-badge {
   display: inline-flex;

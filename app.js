@@ -611,7 +611,7 @@ function renderNext() {
     ${afterHtml}`;
 
   // Async — populates #parking-info once carpark data is ready
-  renderParkingInfo(lat, lng);
+  renderParkingInfo(lat, lng, postal, address);
 }
 
 function startNextRefresh() {
@@ -1505,6 +1505,69 @@ function refreshUraKeyStatus() {
 
 // ─── Parking Info ─────────────────────────────────────────────────────────────
 
+// Private mall carpark lookup — keyed by 6-digit postal code
+// Rates sourced from motorist.sg / carsbruh.com (May 2025). Subject to change.
+const MALL_CARPARK = {
+  // ── Orchard Road ──
+  "238801": { name:"ION Orchard",        rate:"$2.73 first hr, $1.31/30min after",   graceMins:10, evening:"$3.05/entry from 6pm (wkday)" },
+  "238877": { name:"Wisma Atria",        rate:"$2.60 first hr, $1.70/30min after",   graceMins:10, evening:"$5.00/entry from 5pm daily" },
+  "238859": { name:"Paragon",            rate:"$2.58 first hr, $1.48/30min after",   graceMins:10, evening:"$3.48/entry from 5pm (wkday)" },
+  "238895": { name:"313@Somerset",       rate:"$2.00 first hr, $1.00/30min after",   graceMins:10, evening:"$4.50/entry for 3hrs from 6pm" },
+  "238839": { name:"Plaza Singapura",    rate:"$1.95 first 30min, $0.55/15min after",graceMins:10, evening:"$3.25/entry from 6pm" },
+  "238843": { name:"The Centrepoint",    rate:"$2.00 first hr, $1.50/30min after",   graceMins:10, evening:null },
+  "238896": { name:"Orchard Central",    rate:"$2.00 first hr, $1.00/30min after",   graceMins:10, evening:"$4.50/entry for 3hrs from 6pm" },
+  "238872": { name:"Ngee Ann City",      rate:"$1.28/30min",                          graceMins:10, evening:"$4.28/entry from 7pm (wkday)" },
+  // ── Marina / CBD ──
+  "038983": { name:"Suntec City",        rate:"$2.20 first hr, $1.10/30min after",   graceMins:10, evening:"$2.20/entry from 5pm (Mon–Fri)" },
+  "039594": { name:"Marina Square",      rate:"$3.27 first 2hrs, $1.64/30min after", graceMins:10, evening:"$2.25/entry from 5pm (Mon–Thu)" },
+  "179103": { name:"Raffles City",       rate:"$2.60 first hr, $0.65/15min after",   graceMins:10, evening:"$3.25/entry from 6pm (wkday)" },
+  "018972": { name:"The Shoppes at MBS", rate:"$6.00 first hr, $1.00/30min after",   graceMins:20, evening:"$7.00/entry from 7pm" },
+  // ── HarbourFront ──
+  "098585": { name:"VivoCity",           rate:"$1.60 first hr, $0.80/30min after",   graceMins:10, evening:null },
+  // ── Bugis ──
+  "188021": { name:"Bugis Junction",     rate:"$2.60 first hr, $0.43/10min after",   graceMins:10, evening:"$3.30/entry from 6pm (Mon–Thu)" },
+  "188067": { name:"Bugis+",             rate:"$2.20 first hr, $0.55/15min after",   graceMins:10, evening:"$3.30/entry from 6pm (wkday)" },
+  // ── Heartland North ──
+  "579837": { name:"Junction 8",         rate:"$1.35 first hr, $0.45/15min after",   graceMins:10, evening:"$2.65/entry from 6pm" },
+  "569933": { name:"AMK Hub",            rate:"$1.70 first hr, $0.85/30min after",   graceMins:10, evening:null },
+  "556083": { name:"NEX",                rate:"$1.50 first hr, $0.75/30min after",   graceMins:10, evening:null },
+  "738099": { name:"Causeway Point",     rate:"$1.40 first hr, $0.80/30min after",   graceMins:10, evening:null },
+  "769098": { name:"Northpoint City",    rate:"$1.40 first hr, $0.80/30min after",   graceMins:10, evening:null },
+  // ── Heartland West ──
+  "648886": { name:"Jurong Point",       rate:"$1.50 first hr, $0.75/30min after",   graceMins:10, evening:null },
+  "609601": { name:"IMM",                rate:"FREE first hr, $1.20 2nd hr, $0.40/15min after", graceMins:10, evening:null },
+  "608532": { name:"Westgate",           rate:"$1.60 first hr, $0.55/15min after",   graceMins:10, evening:"$3.25/entry from 6pm daily" },
+  "608549": { name:"JEM",                rate:"$2.16 first hr, $0.54/15min after",   graceMins:10, evening:"$3.24/entry from 6pm daily" },
+  // ── Heartland East ──
+  "545078": { name:"Compass One",        rate:"$1.50 first hr, $0.80/30min after",   graceMins:0,  evening:null },
+  "518457": { name:"White Sands",        rate:"$1.35 first hr, $0.90/30min after",   graceMins:10, evening:"$2.45/entry from 6pm daily" },
+  "529510": { name:"Tampines Mall",      rate:"$1.35 first hr, $0.45/15min after",   graceMins:10, evening:"$2.65/entry from 6pm daily" },
+  "529509": { name:"Century Square",     rate:"$1.35 first hr, $0.70/30min after",   graceMins:10, evening:"$2.60/entry from 6pm daily" },
+  "486038": { name:"Changi City Point",  rate:"$1.50 first hr, $0.75/30min after",   graceMins:10, evening:"$2.70/entry from 6pm daily" },
+  "528833": { name:"Eastpoint Mall",     rate:"$1.30 first hr, $0.65/15min after",   graceMins:10, evening:null },
+  // ── Other major ──
+  "237994": { name:"Great World City",   rate:"$1.80 first hr, $0.90/30min after",   graceMins:10, evening:"$3.50/entry from 5pm (wkday)" },
+  "168732": { name:"Tiong Bahru Plaza",  rate:"$1.40 first hr, $1.00/30min after",   graceMins:10, evening:"$3.30/entry from 6pm daily" },
+  "129588": { name:"The Clementi Mall",  rate:"$1.70 first hr, $0.85/30min after",   graceMins:10, evening:null },
+  "467360": { name:"Bedok Mall",         rate:"$1.55 first hr, $0.40/15min after",   graceMins:10, evening:"$2.60/entry from 6pm daily" },
+  "828761": { name:"Waterway Point",     rate:"$1.50 first hr, $0.80/30min after",   graceMins:10, evening:null },
+  "449269": { name:"Parkway Parade",     rate:"$1.73 first hr, $0.43/15min after",   graceMins:10, evening:"$3.46/entry from 6pm daily" },
+};
+
+// Condo keywords — checked against the geocoded address string
+const CONDO_PATTERNS = [
+  /\bCONDOMINIUM\b/i,
+  /\bCONDO\b/i,
+  / @ /,           // e.g. "PARC ESTA @ EUNOS CRESCENT"
+  /\bRESIDENCES\b/i,
+  /\bRESIDENCE\b(?! HALL)/i,  // exclude "RESIDENCE HALL"
+  /\bSUITES\b/i,
+];
+
+function isCondoAddress(address) {
+  return CONDO_PATTERNS.some(p => p.test(address));
+}
+
 const PROXY_URL  = 'https://jk-proxy.jaredkang-drive.workers.dev/';
 const HDB_CP_KEY = 'jkd_hdb_cp';
 const URA_CP_KEY = 'jkd_ura_cp';
@@ -1672,10 +1735,53 @@ function fmtFreeParking(str) {
     .replace('1PM', '1pm');
 }
 
-async function renderParkingInfo(lat, lng) {
+async function renderParkingInfo(lat, lng, postal, address) {
   const el = document.getElementById('parking-info');
   if (!el) return;
 
+  // ── 1. Known private mall? ─────────────────────────────────────────────────
+  if (postal && MALL_CARPARK[postal]) {
+    const m = MALL_CARPARK[postal];
+    const graceText = m.graceMins > 0 ? `${m.graceMins} min grace` : 'No grace period';
+    el.innerHTML = `
+      <div class="parking-card parking-card-mall">
+        <div class="parking-top">
+          <span class="parking-icon">🏬</span>
+          <div class="parking-details">
+            <div class="parking-label">Mall carpark</div>
+            <div class="parking-name-row">
+              <span class="parking-name">${escHtml(m.name)}</span>
+              <span class="parking-src-badge mall">PRIVATE</span>
+            </div>
+            <div class="parking-meta">
+              <span class="parking-rate">${escHtml(m.rate)}</span>
+              <span class="parking-sep">·</span>
+              <span>${graceText}</span>
+            </div>
+            ${m.evening ? `<div class="parking-free">🌙 Evening: ${escHtml(m.evening)}</div>` : ''}
+            <div class="parking-disclaimer">Rates from May 2025 — verify on-site</div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ── 2. Condo / private residence? ─────────────────────────────────────────
+  if (address && isCondoAddress(address)) {
+    el.innerHTML = `
+      <div class="parking-card parking-card-condo">
+        <div class="parking-top">
+          <span class="parking-icon">🏢</span>
+          <div class="parking-details">
+            <div class="parking-label">Condominium</div>
+            <div class="parking-name condo-notice">Report to guard house for visitor parking</div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ── 3. Fall back to nearest public carpark ─────────────────────────────────
   el.innerHTML = '<div class="parking-loading">🔍 Finding nearby parking…</div>';
 
   try {
