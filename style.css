@@ -29,7 +29,7 @@
 /* ── Base ────────────────────────────────────────────────────────────────── */
 
 body {
-  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', Helvetica Neue, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
   height: 100dvh;
