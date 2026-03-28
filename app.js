@@ -1505,11 +1505,10 @@ function refreshUraKeyStatus() {
 
 // ─── Parking Info ─────────────────────────────────────────────────────────────
 
-const PROXY_URL     = 'https://jk-proxy.jaredkang-drive.workers.dev/';
-const HDB_CP_KEY    = 'jkd_hdb_cp';
-const URA_CP_KEY    = 'jkd_ura_cp';
-const URA_TOK_KEY   = 'jkd_ura_token';
-const CP_TTL        = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PROXY_URL  = 'https://jk-proxy.jaredkang-drive.workers.dev/';
+const HDB_CP_KEY = 'jkd_hdb_cp';
+const URA_CP_KEY = 'jkd_ura_cp';
+const CP_TTL     = 7 * 24 * 60 * 60 * 1000; // 7 days
 const RAFFLES_LAT   = 1.2839;
 const RAFFLES_LNG   = 103.8515;
 
@@ -1592,49 +1591,32 @@ async function loadHdbCarparks() {
   return data;
 }
 
-async function getUraToken(accessKey) {
-  const cached = JSON.parse(localStorage.getItem(URA_TOK_KEY) || 'null');
-  if (cached && cached.date === todayStr()) return cached.token;
-  const json = await proxyFetch(
-    `https://eservice.ura.gov.sg/uraDataService/insertNewToken.action?accesskey=${encodeURIComponent(accessKey)}`
-  );
-  if (json.Status !== 'Success') throw new Error('URA token: ' + json.Message);
-  localStorage.setItem(URA_TOK_KEY, JSON.stringify({ date: todayStr(), token: json.Result }));
-  return json.Result;
-}
-
-async function loadUraCarparks(accessKey) {
+async function loadUraCarparks() {
   try {
     const cached = JSON.parse(localStorage.getItem(URA_CP_KEY) || 'null');
-    if (cached && cached.date === todayStr()) return cached.data;
-
-    const token = await getUraToken(accessKey);
-    const json  = await proxyFetch(
-      'https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Details',
-      'GET',
-      { AccessKey: accessKey, Token: token }
-    );
-    if (json.Status !== 'Success') throw new Error('URA CP: ' + json.Message);
-
-    const map = {};
-    for (const r of (json.Result || [])) {
-      if (r.vehCat !== 'Car') continue;
-      const geo = r.geometries?.[0];
-      if (!geo) continue;
-      if (!map[r.ppCode]) {
-        const { lat, lng } = svy21ToLatLng(parseFloat(geo.y), parseFloat(geo.x));
-        map[r.ppCode] = { id: r.ppCode, name: r.ppName, source: 'ura', lat, lng, rates: [] };
-      }
-      map[r.ppCode].rates.push({
-        startTime: r.startTime, endTime: r.endTime,
-        weekdayRate: r.weekdayRate, satdayRate: r.satdayRate, sunPHRate: r.sunPHRate,
-      });
+    if (cached && cached.data?.length > 0 && Date.now() - cached.ts < CP_TTL) {
+      console.log('[Parking] URA from cache:', cached.data.length, 'carparks');
+      return cached.data;
     }
-    const data = Object.values(map);
-    localStorage.setItem(URA_CP_KEY, JSON.stringify({ date: todayStr(), data }));
+    // Load from bundled static file — no API call needed
+    console.log('[Parking] Loading URA carparks from static file…');
+    const res  = await fetch('./ura-carparks.json');
+    if (!res.ok) throw new Error('ura-carparks.json missing');
+    const recs = await res.json();
+    console.log('[Parking] URA loaded:', recs.length, 'carparks');
+    // Remap to internal format
+    const data = recs.map(r => ({
+      id: r.id, name: r.n, source: 'ura',
+      lat: r.lat, lng: r.lng,
+      rates: r.rates.map(rt => ({
+        startTime: rt.s, endTime: rt.e,
+        weekdayRate: rt.wd, satdayRate: rt.sa, sunPHRate: rt.su,
+      })),
+    }));
+    localStorage.setItem(URA_CP_KEY, JSON.stringify({ ts: Date.now(), data }));
     return data;
   } catch (e) {
-    console.warn('URA CP load failed:', e);
+    console.warn('[Parking] URA load failed:', e.message);
     return [];
   }
 }
@@ -1700,11 +1682,8 @@ async function renderParkingInfo(lat, lng) {
     const hdbCps = await loadHdbCarparks();
     let allCps = [...hdbCps];
 
-    const uraKey = localStorage.getItem('jkd_ura_key');
-    if (uraKey) {
-      const uraCps = await loadUraCarparks(uraKey);
-      allCps = allCps.concat(uraCps);
-    }
+    const uraCps = await loadUraCarparks();
+    allCps = allCps.concat(uraCps);
 
     if (!allCps.length) {
       el.innerHTML = `<div class="parking-card parking-card-warn">🅿️ Carpark data unavailable — update Cloudflare Worker (see CLAUDE.md)</div>`;
