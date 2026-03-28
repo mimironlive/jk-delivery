@@ -1512,7 +1512,6 @@ const URA_TOK_KEY   = 'jkd_ura_token';
 const CP_TTL        = 7 * 24 * 60 * 60 * 1000; // 7 days
 const RAFFLES_LAT   = 1.2839;
 const RAFFLES_LNG   = 103.8515;
-const HDB_RESOURCE  = 'd_23f946fa557947f93a8043bbef41dd09';
 
 // SVY21 (EPSG:3414) → WGS84 via Transverse Mercator inverse
 function svy21ToLatLng(northing, easting) {
@@ -1573,36 +1572,20 @@ async function loadHdbCarparks() {
   // Clear any stale/empty cache before re-fetching
   localStorage.removeItem(HDB_CP_KEY);
 
-  const url = `https://data.gov.sg/api/action/datastore_search?resource_id=${HDB_RESOURCE}&limit=5000`;
+  // Load from bundled static file — no API call, no rate limits, works offline
+  console.log('[Parking] Loading HDB carparks from static file…');
+  const res  = await fetch('./hdb-carparks.json');
+  if (!res.ok) throw new Error('hdb-carparks.json missing');
+  const recs = await res.json();
+  console.log('[Parking] HDB loaded:', recs.length, 'carparks');
 
-  // Try browser-direct first — your device IP won't be rate-limited by data.gov.sg.
-  // Only fall back to proxy if direct fails (proxy IP can be rate-limited).
-  let json;
-  try {
-    console.log('[Parking] Fetching HDB carparks directly…');
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    json = await res.json();
-    console.log('[Parking] HDB direct fetch OK');
-  } catch (e) {
-    console.log('[Parking] Direct failed (' + e.message + '), trying proxy…');
-    json = await proxyFetch(url);
-  }
-
-  const recs = json?.result?.records || [];
-  console.log('[Parking] HDB raw records:', recs.length);
-
-  const data = recs
-    .filter(r => parseFloat(r.x_coord) > 0 && parseFloat(r.y_coord) > 0)
-    .map(r => {
-      const { lat, lng } = svy21ToLatLng(parseFloat(r.y_coord), parseFloat(r.x_coord));
-      return {
-        id: r.car_park_no, name: r.address, source: 'hdb', lat, lng,
-        cpType: r.car_park_type,
-        freeParking: r.free_parking,
-        shortTermParking: r.short_term_parking,
-      };
-    });
+  // Static file already has lat/lng pre-converted — just remap field names
+  const data = recs.map(r => ({
+    id: r.id, name: r.n, source: 'hdb',
+    lat: r.lat, lng: r.lng,
+    freeParking: r.fp,
+    shortTermParking: r.st,
+  }));
 
   console.log('[Parking] HDB processed:', data.length, 'carparks');
   localStorage.setItem(HDB_CP_KEY, JSON.stringify({ ts: Date.now(), data }));
