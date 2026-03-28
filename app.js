@@ -1564,41 +1564,45 @@ async function proxyFetch(url, method = 'GET', headers = {}) {
   return res.json();
 }
 
-async function loadHdbCarparks() {
+async function fetchHdbPage(offset) {
+  // Try direct first (CORS-friendly), fall back to proxy
+  const url = `https://data.gov.sg/api/action/datastore_search?resource_id=${HDB_RESOURCE}&limit=1000&offset=${offset}`;
   try {
-    const cached = JSON.parse(localStorage.getItem(HDB_CP_KEY) || 'null');
-    if (cached && Date.now() - cached.ts < CP_TTL) return cached.data;
-
-    let allRecs = [], offset = 0;
-    while (true) {
-      const res  = await fetch(
-        `https://data.gov.sg/api/action/datastore_search?resource_id=${HDB_RESOURCE}&limit=1000&offset=${offset}`
-      );
-      const json = await res.json();
-      const recs = json?.result?.records || [];
-      allRecs = allRecs.concat(recs);
-      if (recs.length < 1000) break;
-      offset += 1000;
-    }
-
-    const data = allRecs
-      .filter(r => parseFloat(r.x_coord) > 0 && parseFloat(r.y_coord) > 0)
-      .map(r => {
-        const { lat, lng } = svy21ToLatLng(parseFloat(r.y_coord), parseFloat(r.x_coord));
-        return {
-          id: r.car_park_no, name: r.address, source: 'hdb', lat, lng,
-          cpType: r.car_park_type,
-          freeParking: r.free_parking,
-          shortTermParking: r.short_term_parking,
-        };
-      });
-
-    localStorage.setItem(HDB_CP_KEY, JSON.stringify({ ts: Date.now(), data }));
-    return data;
-  } catch (e) {
-    console.warn('HDB CP load failed:', e);
-    return [];
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    return res.json();
+  } catch {
+    return proxyFetch(url);
   }
+}
+
+async function loadHdbCarparks() {
+  const cached = JSON.parse(localStorage.getItem(HDB_CP_KEY) || 'null');
+  if (cached && Date.now() - cached.ts < CP_TTL) return cached.data;
+
+  let allRecs = [], offset = 0;
+  while (true) {
+    const json = await fetchHdbPage(offset);
+    const recs = json?.result?.records || [];
+    allRecs = allRecs.concat(recs);
+    if (recs.length < 1000) break;
+    offset += 1000;
+  }
+
+  const data = allRecs
+    .filter(r => parseFloat(r.x_coord) > 0 && parseFloat(r.y_coord) > 0)
+    .map(r => {
+      const { lat, lng } = svy21ToLatLng(parseFloat(r.y_coord), parseFloat(r.x_coord));
+      return {
+        id: r.car_park_no, name: r.address, source: 'hdb', lat, lng,
+        cpType: r.car_park_type,
+        freeParking: r.free_parking,
+        shortTermParking: r.short_term_parking,
+      };
+    });
+
+  localStorage.setItem(HDB_CP_KEY, JSON.stringify({ ts: Date.now(), data }));
+  return data;
 }
 
 async function getUraToken(accessKey) {
@@ -1715,10 +1719,16 @@ async function renderParkingInfo(lat, lng) {
       allCps = allCps.concat(uraCps);
     }
 
-    if (!allCps.length) { el.innerHTML = ''; return; }
+    if (!allCps.length) {
+      el.innerHTML = `<div class="parking-card parking-card-warn">🅿️ Carpark data unavailable — update Cloudflare Worker (see CLAUDE.md)</div>`;
+      return;
+    }
 
     const cp = findNearestCarpark(lat, lng, allCps);
-    if (!cp) { el.innerHTML = ''; return; }
+    if (!cp) {
+      el.innerHTML = `<div class="parking-card parking-card-warn">🅿️ No nearby carpark found</div>`;
+      return;
+    }
 
     let rateText, freeParkingHtml = '';
     if (cp.source === 'hdb') {
@@ -1752,8 +1762,10 @@ async function renderParkingInfo(lat, lng) {
         </div>
       </div>`;
   } catch (e) {
-    el.innerHTML = '<div class="parking-error">Parking info unavailable</div>';
-    console.warn('Parking:', e);
+    el.innerHTML = `<div class="parking-card parking-card-warn">🅿️ Parking info unavailable
+      <button class="parking-retry" onclick="renderParkingInfo(${lat},${lng})">Retry</button>
+    </div>`;
+    console.warn('Parking:', e.message || e);
   }
 }
 
