@@ -1564,32 +1564,21 @@ async function proxyFetch(url, method = 'GET', headers = {}) {
   return res.json();
 }
 
-async function fetchHdbPage(offset) {
-  // Try direct first (CORS-friendly), fall back to proxy
-  const url = `https://data.gov.sg/api/action/datastore_search?resource_id=${HDB_RESOURCE}&limit=1000&offset=${offset}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(res.status);
-    return res.json();
-  } catch {
-    return proxyFetch(url);
-  }
-}
-
 async function loadHdbCarparks() {
   const cached = JSON.parse(localStorage.getItem(HDB_CP_KEY) || 'null');
-  if (cached && Date.now() - cached.ts < CP_TTL) return cached.data;
-
-  let allRecs = [], offset = 0;
-  while (true) {
-    const json = await fetchHdbPage(offset);
-    const recs = json?.result?.records || [];
-    allRecs = allRecs.concat(recs);
-    if (recs.length < 1000) break;
-    offset += 1000;
+  if (cached && Date.now() - cached.ts < CP_TTL) {
+    console.log('[Parking] HDB from cache:', cached.data.length, 'carparks');
+    return cached.data;
   }
 
-  const data = allRecs
+  console.log('[Parking] Fetching HDB carparks via proxy…');
+  // Single request for all ~2300 records — avoids rate-limit from pagination
+  const url = `https://data.gov.sg/api/action/datastore_search?resource_id=${HDB_RESOURCE}&limit=5000`;
+  const json = await proxyFetch(url);
+  const recs = json?.result?.records || [];
+  console.log('[Parking] HDB raw records:', recs.length);
+
+  const data = recs
     .filter(r => parseFloat(r.x_coord) > 0 && parseFloat(r.y_coord) > 0)
     .map(r => {
       const { lat, lng } = svy21ToLatLng(parseFloat(r.y_coord), parseFloat(r.x_coord));
@@ -1601,6 +1590,7 @@ async function loadHdbCarparks() {
       };
     });
 
+  console.log('[Parking] HDB processed:', data.length, 'carparks');
   localStorage.setItem(HDB_CP_KEY, JSON.stringify({ ts: Date.now(), data }));
   return data;
 }
