@@ -797,6 +797,96 @@ select:focus {
   color: #003087;
 }
 
+/* Parking info card */
+.parking-info { flex-shrink: 0; }
+
+.parking-card {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+
+.parking-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.parking-icon { font-size: 22px; line-height: 1; margin-top: 1px; }
+
+.parking-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.parking-name-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.parking-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.parking-src-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+.parking-src-badge.hdb { background: #E0F0FF; color: #1565C0; }
+.parking-src-badge.ura { background: #E8F5E9; color: #2E7D32; }
+
+.parking-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.parking-rate {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.parking-sep { color: var(--border); }
+
+.parking-dist { color: var(--muted); }
+
+.parking-free {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.parking-loading {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 10px 0 2px;
+}
+
+.parking-error {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 10px 0 2px;
+}
+
 /* Batch badge */
 .batch-badge {
   display: inline-flex;
@@ -1166,6 +1256,18 @@ select:focus {
   font-weight: 600;
   margin-top: 6px;
   min-height: 18px;
+}
+
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+
+.settings-label-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 /* ── Scan button ─────────────────────────────────────────────────────────── */

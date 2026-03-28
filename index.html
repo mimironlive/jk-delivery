@@ -44,6 +44,20 @@
       </div>
       <button class="btn btn-primary" onclick="saveApiKey()">Save API Key</button>
       <button class="btn btn-outline" style="margin-top:8px" onclick="clearApiKey()">Clear Key</button>
+
+      <hr class="settings-divider">
+
+      <div class="form-group">
+        <label>URA Access Key <span class="settings-label-hint">— for Orchard, CBD &amp; mall carpark rates</span></label>
+        <div class="api-key-row">
+          <input type="password" id="ura-key-input" placeholder="URA AccessKey..." autocomplete="off">
+          <button class="btn btn-outline btn-sm" onclick="toggleUraKeyVisibility()">👁</button>
+        </div>
+        <p class="field-hint">Free registration at <strong>ura.gov.sg</strong> → Data Services. Without this, HDB rates are shown. Stored locally only.</p>
+        <div id="ura-key-status" class="api-key-status"></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveUraKey()">Save URA Key</button>
+      <button class="btn btn-outline" style="margin-top:8px" onclick="clearUraKey()">Clear URA Key</button>
     </div>
   </div>
 
@@ -301,7 +315,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

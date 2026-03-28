@@ -598,6 +598,7 @@ function renderNext() {
           <div class="next-postal">${postal}</div>
         </div>
         ${hasTimeInfo ? `<div class="next-time-block">${etaRow}${travelRow}${windowRow}${deadlineRow}</div>` : ''}
+        <div id="parking-info" class="parking-info"></div>
         ${equipHtml}
         ${job.note ? `<div class="next-note">📝 ${escHtml(job.note)}</div>` : ''}
         <div class="next-nav-row">
@@ -608,6 +609,9 @@ function renderNext() {
       </div>
     </div>
     ${afterHtml}`;
+
+  // Async — populates #parking-info once carpark data is ready
+  renderParkingInfo(lat, lng);
 }
 
 function startNextRefresh() {
@@ -1407,6 +1411,9 @@ function openSettings() {
   const stored = localStorage.getItem('jkd_api_key') || '';
   document.getElementById('api-key-input').value = stored;
   refreshApiKeyStatus();
+  const storedUra = localStorage.getItem('jkd_ura_key') || '';
+  document.getElementById('ura-key-input').value = storedUra;
+  refreshUraKeyStatus();
 }
 
 function closeSettings() {
@@ -1451,6 +1458,302 @@ function refreshApiKeyStatus() {
   } else {
     el.textContent = '⚠ No API key — screenshot scanning disabled';
     el.style.color  = 'var(--warning)';
+  }
+}
+
+function saveUraKey() {
+  const key = document.getElementById('ura-key-input').value.trim();
+  if (key) {
+    localStorage.setItem('jkd_ura_key', key);
+    // Bust cached URA data so it re-fetches with new key
+    localStorage.removeItem('jkd_ura_cp');
+    localStorage.removeItem('jkd_ura_token');
+    toast('URA key saved ✓');
+  } else {
+    localStorage.removeItem('jkd_ura_key');
+    toast('No key entered — nothing saved');
+  }
+  refreshUraKeyStatus();
+}
+
+function clearUraKey() {
+  localStorage.removeItem('jkd_ura_key');
+  localStorage.removeItem('jkd_ura_cp');
+  localStorage.removeItem('jkd_ura_token');
+  document.getElementById('ura-key-input').value = '';
+  refreshUraKeyStatus();
+  toast('URA key cleared');
+}
+
+function toggleUraKeyVisibility() {
+  const inp = document.getElementById('ura-key-input');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function refreshUraKeyStatus() {
+  const el  = document.getElementById('ura-key-status');
+  if (!el) return;
+  const key = localStorage.getItem('jkd_ura_key');
+  if (key) {
+    el.textContent = '✓ URA key set — Orchard, CBD & mall rates enabled';
+    el.style.color  = 'var(--success)';
+  } else {
+    el.textContent = 'No URA key — HDB carpark rates only';
+    el.style.color  = 'var(--muted)';
+  }
+}
+
+// ─── Parking Info ─────────────────────────────────────────────────────────────
+
+const PROXY_URL     = 'https://jk-proxy.jaredkang-drive.workers.dev/';
+const HDB_CP_KEY    = 'jkd_hdb_cp';
+const URA_CP_KEY    = 'jkd_ura_cp';
+const URA_TOK_KEY   = 'jkd_ura_token';
+const CP_TTL        = 7 * 24 * 60 * 60 * 1000; // 7 days
+const RAFFLES_LAT   = 1.2839;
+const RAFFLES_LNG   = 103.8515;
+const HDB_RESOURCE  = 'd_23f946fa557947f93a8043bbef41dd09';
+
+// SVY21 (EPSG:3414) → WGS84 via Transverse Mercator inverse
+function svy21ToLatLng(northing, easting) {
+  const a   = 6378137.0, f = 1 / 298.257223563, k0 = 1.0;
+  const lat0 = (1 + 22/60 + 2.9154/3600) * Math.PI / 180;
+  const lon0 = (103 + 49/60 + 31.9752/3600) * Math.PI / 180;
+  const FN  = 38744.572, FE = 28001.642;
+  const b   = a * (1 - f);
+  const e2  = 1 - (b/a) ** 2;
+  const ep2 = e2 / (1 - e2);
+  const e1  = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const A0  = 1 - e2/4 - 3*e2**2/64 - 5*e2**3/256;
+  const A2  = 3/8 * (e2 + e2**2/4 + 15*e2**3/128);
+  const A4  = 15/256 * (e2**2 + 3*e2**3/4);
+  const A6  = 35 * e2**3 / 3072;
+  const M0  = a * (A0*lat0 - A2*Math.sin(2*lat0) + A4*Math.sin(4*lat0) - A6*Math.sin(6*lat0));
+  const M   = M0 + (northing - FN) / k0;
+  const mu  = M / (a * A0);
+  const phi1 = mu
+    + (3*e1/2 - 27*e1**3/32)    * Math.sin(2*mu)
+    + (21*e1**2/16 - 55*e1**4/32) * Math.sin(4*mu)
+    + (151*e1**3/96)             * Math.sin(6*mu)
+    + (1097*e1**4/512)           * Math.sin(8*mu);
+  const sp1 = Math.sin(phi1), cp1 = Math.cos(phi1), tp1 = sp1 / cp1;
+  const N1  = a / Math.sqrt(1 - e2 * sp1**2);
+  const T1  = tp1**2, C1 = ep2 * cp1**2;
+  const R1  = a * (1 - e2) / (1 - e2 * sp1**2) ** 1.5;
+  const D   = (easting - FE) / (N1 * k0);
+  const latR = phi1 - (N1*tp1/R1) * (
+    D**2/2
+    - (5 + 3*T1 + 10*C1 - 4*C1**2 - 9*ep2) * D**4/24
+    + (61 + 90*T1 + 298*C1 + 45*T1**2 - 252*ep2 - 3*C1**2) * D**6/720
+  );
+  const lonR = lon0 + (
+    D - (1 + 2*T1 + C1) * D**3/6
+    + (5 - 2*C1 + 28*T1 - 3*C1**2 + 8*ep2 + 24*T1**2) * D**5/120
+  ) / cp1;
+  return { lat: latR * 180/Math.PI, lng: lonR * 180/Math.PI };
+}
+
+// Generic proxy fetch (routes through Cloudflare Worker)
+async function proxyFetch(url, method = 'GET', headers = {}) {
+  const res = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proxy_url: url, proxy_method: method, proxy_headers: headers }),
+  });
+  if (!res.ok) throw new Error(`Proxy ${res.status}`);
+  return res.json();
+}
+
+async function loadHdbCarparks() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(HDB_CP_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < CP_TTL) return cached.data;
+
+    let allRecs = [], offset = 0;
+    while (true) {
+      const res  = await fetch(
+        `https://data.gov.sg/api/action/datastore_search?resource_id=${HDB_RESOURCE}&limit=1000&offset=${offset}`
+      );
+      const json = await res.json();
+      const recs = json?.result?.records || [];
+      allRecs = allRecs.concat(recs);
+      if (recs.length < 1000) break;
+      offset += 1000;
+    }
+
+    const data = allRecs
+      .filter(r => parseFloat(r.x_coord) > 0 && parseFloat(r.y_coord) > 0)
+      .map(r => {
+        const { lat, lng } = svy21ToLatLng(parseFloat(r.y_coord), parseFloat(r.x_coord));
+        return {
+          id: r.car_park_no, name: r.address, source: 'hdb', lat, lng,
+          cpType: r.car_park_type,
+          freeParking: r.free_parking,
+          shortTermParking: r.short_term_parking,
+        };
+      });
+
+    localStorage.setItem(HDB_CP_KEY, JSON.stringify({ ts: Date.now(), data }));
+    return data;
+  } catch (e) {
+    console.warn('HDB CP load failed:', e);
+    return [];
+  }
+}
+
+async function getUraToken(accessKey) {
+  const cached = JSON.parse(localStorage.getItem(URA_TOK_KEY) || 'null');
+  if (cached && cached.date === todayStr()) return cached.token;
+  const json = await proxyFetch(
+    `https://eservice.ura.gov.sg/uraDataService/insertNewToken.action?accesskey=${encodeURIComponent(accessKey)}`
+  );
+  if (json.Status !== 'Success') throw new Error('URA token: ' + json.Message);
+  localStorage.setItem(URA_TOK_KEY, JSON.stringify({ date: todayStr(), token: json.Result }));
+  return json.Result;
+}
+
+async function loadUraCarparks(accessKey) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(URA_CP_KEY) || 'null');
+    if (cached && cached.date === todayStr()) return cached.data;
+
+    const token = await getUraToken(accessKey);
+    const json  = await proxyFetch(
+      'https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Details',
+      'GET',
+      { AccessKey: accessKey, Token: token }
+    );
+    if (json.Status !== 'Success') throw new Error('URA CP: ' + json.Message);
+
+    const map = {};
+    for (const r of (json.Result || [])) {
+      if (r.vehCat !== 'Car') continue;
+      const geo = r.geometries?.[0];
+      if (!geo) continue;
+      if (!map[r.ppCode]) {
+        const { lat, lng } = svy21ToLatLng(parseFloat(geo.y), parseFloat(geo.x));
+        map[r.ppCode] = { id: r.ppCode, name: r.ppName, source: 'ura', lat, lng, rates: [] };
+      }
+      map[r.ppCode].rates.push({
+        startTime: r.startTime, endTime: r.endTime,
+        weekdayRate: r.weekdayRate, satdayRate: r.satdayRate, sunPHRate: r.sunPHRate,
+      });
+    }
+    const data = Object.values(map);
+    localStorage.setItem(URA_CP_KEY, JSON.stringify({ date: todayStr(), data }));
+    return data;
+  } catch (e) {
+    console.warn('URA CP load failed:', e);
+    return [];
+  }
+}
+
+function findNearestCarpark(lat, lng, carparks) {
+  let best = null, minDist = Infinity;
+  for (const cp of carparks) {
+    const d = haversineKm(lat, lng, cp.lat, cp.lng);
+    if (d < minDist) { minDist = d; best = cp; }
+  }
+  return best ? { ...best, distM: Math.round(minDist * 1000) } : null;
+}
+
+function parseUraTime(str) {
+  if (!str) return null;
+  const m = str.match(/(\d+)\.(\d+)\s*(AM|PM)/i);
+  if (!m) return null;
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  const ap = m[3].toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+function getCurrentUraRate(rates) {
+  const now = new Date();
+  const day = now.getDay();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  for (const r of rates) {
+    const s = parseUraTime(r.startTime), e = parseUraTime(r.endTime);
+    if (s == null || e == null) continue;
+    const inWindow = e > s ? cur >= s && cur < e : cur >= s || cur < e;
+    if (!inWindow) continue;
+    if (day === 0) return r.sunPHRate;
+    if (day === 6) return r.satdayRate;
+    return r.weekdayRate;
+  }
+  return rates[0]?.weekdayRate || null;
+}
+
+function getHdbRate(lat, lng) {
+  return haversineKm(lat, lng, RAFFLES_LAT, RAFFLES_LNG) < 2
+    ? '$1.20 / 30 min'
+    : '$0.60 / 30 min';
+}
+
+function fmtFreeParking(str) {
+  if (!str || str === 'NO') return null;
+  return str
+    .replace('SUN & PH FR ', 'Sun & PH · ')
+    .replace('7AM', '7am')
+    .replace('10.30PM', '10:30pm')
+    .replace('1PM', '1pm');
+}
+
+async function renderParkingInfo(lat, lng) {
+  const el = document.getElementById('parking-info');
+  if (!el) return;
+
+  el.innerHTML = '<div class="parking-loading">🔍 Finding nearby parking…</div>';
+
+  try {
+    const hdbCps = await loadHdbCarparks();
+    let allCps = [...hdbCps];
+
+    const uraKey = localStorage.getItem('jkd_ura_key');
+    if (uraKey) {
+      const uraCps = await loadUraCarparks(uraKey);
+      allCps = allCps.concat(uraCps);
+    }
+
+    if (!allCps.length) { el.innerHTML = ''; return; }
+
+    const cp = findNearestCarpark(lat, lng, allCps);
+    if (!cp) { el.innerHTML = ''; return; }
+
+    let rateText, freeParkingHtml = '';
+    if (cp.source === 'hdb') {
+      rateText = getHdbRate(cp.lat, cp.lng);
+      const fp = fmtFreeParking(cp.freeParking);
+      if (fp) freeParkingHtml = `<div class="parking-free">🆓 Free: ${fp}</div>`;
+    } else {
+      rateText = getCurrentUraRate(cp.rates) || 'Check signage';
+    }
+
+    const distText = cp.distM < 1000 ? `${cp.distM}m away` : `${(cp.distM/1000).toFixed(1)}km away`;
+
+    el.innerHTML = `
+      <div class="parking-card">
+        <div class="parking-top">
+          <span class="parking-icon">🅿️</span>
+          <div class="parking-details">
+            <div class="parking-name-row">
+              <span class="parking-name">${escHtml(cp.name)}</span>
+              <span class="parking-src-badge ${cp.source}">${cp.source.toUpperCase()}</span>
+            </div>
+            <div class="parking-meta">
+              <span class="parking-rate">${escHtml(rateText)}</span>
+              <span class="parking-sep">·</span>
+              <span>15 min grace</span>
+              <span class="parking-sep">·</span>
+              <span class="parking-dist">${distText}</span>
+            </div>
+            ${freeParkingHtml}
+          </div>
+        </div>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = '<div class="parking-error">Parking info unavailable</div>';
+    console.warn('Parking:', e);
   }
 }
 
