@@ -829,6 +829,15 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.parking-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
 .parking-name {
   font-size: 13px;
   font-weight: 700;

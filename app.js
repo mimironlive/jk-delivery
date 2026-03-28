@@ -1712,6 +1712,7 @@ async function renderParkingInfo(lat, lng) {
         <div class="parking-top">
           <span class="parking-icon">🅿️</span>
           <div class="parking-details">
+            <div class="parking-label">Nearest public carpark</div>
             <div class="parking-name-row">
               <span class="parking-name">${escHtml(cp.name)}</span>
               <span class="parking-src-badge ${cp.source}">${cp.source.toUpperCase()}</span>
