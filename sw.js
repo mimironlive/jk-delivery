@@ -1,4 +1,4 @@
-const CACHE = 'jkd-v6';
+const CACHE = 'jkd-v7';
 
 // App shell — everything needed to load the UI
 const SHELL = [
