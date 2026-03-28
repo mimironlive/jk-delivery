@@ -1735,6 +1735,74 @@ function fmtFreeParking(str) {
     .replace('1PM', '1pm');
 }
 
+// ─── AI Parking Lookup ────────────────────────────────────────────────────────
+
+const AI_CP_CACHE_KEY = 'jkd_ai_cp_cache';
+const AI_CP_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function loadAiCpCache() {
+  try { return JSON.parse(localStorage.getItem(AI_CP_CACHE_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function saveAiCpEntry(postal, data) {
+  const cache = loadAiCpCache();
+  cache[postal] = { ts: Date.now(), data };
+  localStorage.setItem(AI_CP_CACHE_KEY, JSON.stringify(cache));
+}
+
+async function fetchAiParkingInfo(postal, address) {
+  // Return cached entry if still fresh
+  const cache = loadAiCpCache();
+  const hit = cache[postal];
+  if (hit && Date.now() - hit.ts < AI_CP_TTL) return hit.data;
+
+  const key = localStorage.getItem('jkd_api_key');
+  if (!key) return null;
+
+  const prompt = `You are a Singapore delivery driver assistant. I am making a delivery to:
+Postal code: ${postal}
+Address: ${address || 'unknown'}
+
+What are the visitor / short-term parking arrangements at this location?
+
+Reply ONLY with valid JSON in this exact format (no markdown, no explanation):
+{"type":"mall|office|hdb|hospital|other","name":"building or carpark name","rate":"rate string or null","graceMins":15,"freeParking":"description or null","notes":"one short useful note or null"}
+
+Rules:
+- If you have no specific rate info, set rate to null
+- graceMins: use 10 for private malls, 15 for HDB/URA, 0 if none known
+- Keep all string values under 70 characters
+- Do not fabricate rates you are not confident about`;
+
+  try {
+    const resp = await fetch('https://jk-proxy.jaredkang-drive.workers.dev/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const text = json.content?.[0]?.text || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const data = JSON.parse(match[0]);
+    saveAiCpEntry(postal, data);
+    return data;
+  } catch (e) {
+    console.warn('AI parking lookup failed:', e.message || e);
+    return null;
+  }
+}
+
 async function renderParkingInfo(lat, lng, postal, address) {
   const el = document.getElementById('parking-info');
   if (!el) return;
@@ -1781,7 +1849,39 @@ async function renderParkingInfo(lat, lng, postal, address) {
     return;
   }
 
-  // ── 3. Fall back to nearest public carpark ─────────────────────────────────
+  // ── 3. AI lookup for unknown private / commercial locations ───────────────
+  if (postal && localStorage.getItem('jkd_api_key')) {
+    el.innerHTML = '<div class="parking-loading">🤖 Looking up parking info…</div>';
+    const aiInfo = await fetchAiParkingInfo(postal, address);
+    if (aiInfo) {
+      const icon = { mall:'🏬', hospital:'🏥', office:'🏢', hdb:'🅿️', other:'🅿️' }[aiInfo.type] || '🅿️';
+      const rateHtml   = aiInfo.rate      ? `<span class="parking-rate">${escHtml(aiInfo.rate)}</span><span class="parking-sep">·</span>` : '';
+      const graceHtml  = aiInfo.graceMins != null ? `<span>${aiInfo.graceMins} min grace</span>` : '';
+      const freeHtml   = aiInfo.freeParking ? `<div class="parking-free">🆓 Free: ${escHtml(aiInfo.freeParking)}</div>` : '';
+      const notesHtml  = aiInfo.notes      ? `<div class="parking-ai-notes">${escHtml(aiInfo.notes)}</div>` : '';
+      el.innerHTML = `
+        <div class="parking-card parking-card-ai">
+          <div class="parking-top">
+            <span class="parking-icon">${icon}</span>
+            <div class="parking-details">
+              <div class="parking-label">Parking info</div>
+              <div class="parking-name-row">
+                <span class="parking-name">${escHtml(aiInfo.name || address || postal)}</span>
+                <span class="parking-src-badge ai">AI</span>
+              </div>
+              <div class="parking-meta">${rateHtml}${graceHtml}</div>
+              ${freeHtml}
+              ${notesHtml}
+              <div class="parking-disclaimer">🤖 AI estimate — verify rate on-site</div>
+            </div>
+          </div>
+        </div>`;
+      return;
+    }
+    // AI failed or returned nothing — fall through to public carpark
+  }
+
+  // ── 4. Fall back to nearest public carpark ─────────────────────────────────
   el.innerHTML = '<div class="parking-loading">🔍 Finding nearby parking…</div>';
 
   try {
@@ -1836,7 +1936,7 @@ async function renderParkingInfo(lat, lng, postal, address) {
       </div>`;
   } catch (e) {
     el.innerHTML = `<div class="parking-card parking-card-warn">🅿️ Parking info unavailable
-      <button class="parking-retry" onclick="renderParkingInfo(${lat},${lng})">Retry</button>
+      <button class="parking-retry" onclick="renderParkingInfo(${lat},${lng},'${postal}','${(address||'').replace(/'/g,"\\'")}')">Retry</button>
     </div>`;
     console.warn('Parking:', e.message || e);
   }

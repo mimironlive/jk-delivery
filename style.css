@@ -916,6 +916,18 @@ select:focus {
 .parking-retry:active { opacity: 0.7; }
 
 .parking-src-badge.mall { background: #FFF3E0; color: #E65100; }
+.parking-src-badge.ai   { background: #E8EEFF; color: #3D52C4; }
+
+.parking-card-ai {
+  background: #F3F5FF;
+  border: 1px solid #C5CDFA;
+}
+
+.parking-ai-notes {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
 
 .parking-card-mall {
   background: #FFF8F0;
